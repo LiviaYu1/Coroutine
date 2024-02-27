@@ -14,27 +14,34 @@ static std::atomic<uint64_t> s_coroutine_count{0};
 
 // 线程局部变量，当前线程正在运行的协程
 static thread_local Coroutine *thread_coroutine = nullptr;
-// 用于保存当前协程库中的主协程，即调度协程
+/*
+线程局部变量，当前线程的主协程，切换到这个协程，就相当于切换到了主线程中运行，智能指针形式
+根据调度情况的不同，main coroutine有不同的情况
+1. main协程->调度协程->任务协程 模型 main_co指的是main协程，不能在调度协程和任务协程中相互切换，会导致程序跑飞
+2. main->分出子线程->调度协程->任务模型 模型 main_co是调度协程
+而在后面的代码中，Scheduler类中保存了调度协程的相关信息，所以这里就是线程主协程了
+*/
+
 static thread_local Coroutine::ptr main_coroutine = nullptr;
 
 Coroutine::Coroutine()
 {
     // 设置当前协程为运行协程，因为改构造函数只用来创建第一个协程，所以状态一定为running
     SetThis(this);
-    c_state = RUNNING;
+    m_state = RUNNING;
 
     // 成功时返回0
     // 失败了返回-1
-    if (getcontext(&c_context))
+    if (getcontext(&m_context))
     {
         perror("getcontext failed...");
     }
 
     // 当前协程id和协程数量自增
     ++s_coroutine_count;
-    c_id = s_coroutine_id++;
+    m_id = s_coroutine_id++;
 
-    std::cout << "Coroutine() id : " << c_id << std::endl;
+    std::cout << "Coroutine() id : " << m_id << std::endl;
 }
 
 /*
@@ -43,33 +50,33 @@ Coroutine::Coroutine()
     @param2 stacksize 栈大小默认128k
     */
 Coroutine::Coroutine(std::function<void()> func, size_t stacksize, bool run_in_scheduler)
-    : c_id(s_coroutine_id++), c_func(func), c_runInScheduler(run_in_scheduler)
+    : m_id(s_coroutine_id++), m_func(func), m_runInScheduler(run_in_scheduler)
 {
     ++s_coroutine_count;
 
     // 分配协程栈空间
-    c_stacksize = stacksize ? stacksize : DEFAULT_STACK_SIZE;
-    c_stack = malloc(c_stacksize);
-    if (c_stack == nullptr)
+    m_stacksize = stacksize ? stacksize : DEFAULT_STACK_SIZE;
+    m_stack = malloc(m_stacksize);
+    if (m_stack == nullptr)
     {
         perror("malloc stack failed...");
     }
-    // c_stack = new char[c_stacksize];
-    memset(c_stack, 0, c_stacksize);
+    // m_stack = new char[m_stacksize];
+    memset(m_stack, 0, m_stacksize);
 
     // 获取上下文
-    if (getcontext(&c_context))
+    if (getcontext(&m_context))
     {
         perror("getcontext failed...");
     }
     // 设置上下文
-    c_context.uc_stack.ss_sp = c_stack;
-    c_context.uc_stack.ss_size = c_stacksize;
-    c_context.uc_link = nullptr;
+    m_context.uc_stack.ss_sp = m_stack;
+    m_context.uc_stack.ss_size = m_stacksize;
+    m_context.uc_link = nullptr;
 
-    makecontext(&c_context, &Coroutine::MainFunc, 0);
+    makecontext(&m_context, &Coroutine::MainFunc, 0);
 
-    std::cout << "Coroutine() id : " << c_id << std::endl;
+    std::cout << "Coroutine() id : " << m_id << std::endl;
 }
 /*
 @brief 析构函数
@@ -78,22 +85,22 @@ Coroutine::~Coroutine()
 {
     --s_coroutine_count;
     // 主协程由无参构造函数创建，没有对应的栈
-    if (c_stack)
+    if (m_stack)
     {
-        assert(c_state == TERM);
-        free(c_stack);
+        assert(m_state == TERM);
+        free(m_stack);
     }
     else // 主协程
     {
-        assert(!c_func);
-        assert(c_state == RUNNING);
+        assert(!m_func);
+        assert(m_state == RUNNING);
         Coroutine *cur = thread_coroutine;
         if (cur == this)
         {
             SetThis(nullptr);
         }
     }
-    std::cout << "~Coroutine() id : " << c_id << std::endl;
+    std::cout << "~Coroutine() id : " << m_id << std::endl;
 }
 
 /*
@@ -133,15 +140,26 @@ void Coroutine::SetThis(Coroutine *crt)
 void Coroutine::resume()
 {
     // resume的协程不能是终止的或者是正在运行的
-    assert(c_state != TERM && c_state != RUNNING);
+    assert(m_state != TERM && m_state != RUNNING);
     // 设置当前协程为this
     SetThis(this);
-    c_state = RUNNING;
-    // 由于实现的是非对称协程，所有协程只能由主协程进行调控，所以这里保存的上下文是main_coroutine的上下文
-    if (swapcontext(&main_coroutine->c_context, &c_context))
+    m_state = RUNNING;
+    if (m_runInScheduler)
     {
-        perror("resume swapcontext failed...");
+        //如果协程参与调度器调度，那么和调度器协程swap
+        if (swapcontext(&(Scheduler::GetMainCoroutine()->m_ctx, &m_ctx)))
+        {
+            perror("resume swapcontext failed...");
+        }
     }
+    else
+    {
+        if (swapcontext(&main_coroutine->m_context, &m_context))
+        {
+            perror("resume swapcontext failed...");
+        }
+    }
+    // 由于实现的是非对称协程，所有协程只能由主协程进行调控，所以这里保存的上下文是main_coroutine的上下文
 }
 
 /*
@@ -152,17 +170,28 @@ void Coroutine::resume()
 void Coroutine::yield()
 {
     // 运行完成后会自动yield此时为term状态
-    assert(c_state == RUNNING || c_state == TERM);
+    assert(m_state == RUNNING || m_state == TERM);
     // 回到主协程
     SetThis(main_coroutine.get());
-    if (c_state != TERM)
+    if (m_state != TERM)
     {
-        c_state = READY;
+        m_state = READY;
     }
-    // 上下文切换
-    if (swapcontext(&c_context, &main_coroutine->c_context))
+    //上下文切换
+    if (m_runInScheduler)
     {
-        perror("yield swapcontext failed...");
+        //如果协程参与调度器调度，那么和调度器协程swap
+        if (swapcontext(&m_ctx,&(Scheduler::GetMainCoroutine()->m_ctx)))
+        {
+            perror("resume swapcontext failed...");
+        }
+    }
+    else
+    {
+        if (swapcontext(&main_coroutine->m_context, &m_context))
+        {
+            perror("resume swapcontext failed...");
+        }
     }
 }
 
@@ -174,10 +203,10 @@ void Coroutine::MainFunc()
     Coroutine::ptr cur = GetThis();
     assert(cur);
 
-    cur->c_func(); // 这里进行协程的执行，真正的入口函数
-    cur->c_func = nullptr;
-    cur->c_state = TERM;
-    //这里的解释
+    cur->m_func(); // 这里进行协程的执行，真正的入口函数
+    cur->m_func = nullptr;
+    cur->m_state = TERM;
+    // 这里的解释
     /*
     这里为什么要使用裸指针调用yield()而不是使用cur来调用呢？
     如果使用cur的话，指针一直在栈上引用计数一直为1，无法正常进行释放
@@ -189,7 +218,7 @@ void Coroutine::MainFunc()
     但是作为一个非对称的协程库，uclink其实不用设置（本项目中uclink都是nullptr）
     因为每个协程执行完都要回到主协程，所以直接调用yield()让他切回主协程就行了
     */
-    raw_ptr->yield(); 
+    raw_ptr->yield();
 }
 /*
     @brief: 重置协程状态和入口函数，复用已经存在的栈空间
@@ -198,20 +227,20 @@ void Coroutine::MainFunc()
 void Coroutine::reset(std::function<void()> func)
 {
     // 主协程是没有栈的，只复用子协程
-    assert(c_stack);
-    assert(c_state == TERM);
-    c_func = func;
-    if (getcontext(&c_context))
+    assert(m_stack);
+    assert(m_state == TERM);
+    m_func = func;
+    if (getcontext(&m_context))
     {
         perror("reset getcontext failed...");
     }
-    c_context.uc_link = nullptr;
-    c_context.uc_stack.ss_sp = c_stack;
-    c_context.uc_stack.ss_size = c_stacksize;
+    m_context.uc_link = nullptr;
+    m_context.uc_stack.ss_sp = m_stack;
+    m_context.uc_stack.ss_size = m_stacksize;
 
-    makecontext(&c_context, &Coroutine::MainFunc, 0);
+    makecontext(&m_context, &Coroutine::MainFunc, 0);
 
-    c_state = READY;
+    m_state = READY;
 }
 
 uint64_t Coroutine::TotalCoroutines()

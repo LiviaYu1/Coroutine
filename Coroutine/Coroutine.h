@@ -64,12 +64,12 @@ public:
     /*
     @brief 获取协程id
     */
-    uint64_t getId() const { return c_id; };
+    uint64_t getId() const { return m_id; };
 
     /*
     @brief 获取协程状态
     */
-    State getState() const { return c_state; };
+    State getState() const { return m_state; };
 
 public:
     /*
@@ -103,17 +103,17 @@ public:
     // 成员变量
 private:
     // 协程id
-    uint64_t c_id = 0;
+    uint64_t m_id = 0;
     // 协程栈大小
-    uint32_t c_stacksize = 0;
+    uint32_t m_stacksize = 0;
     // 协程栈地址
-    void *c_stack = nullptr;
+    void *m_stack = nullptr;
     // 协程状态
-    State c_state = READY;
+    State m_state = READY;
     // 协程上下文
-    ucontext_t c_context;
+    ucontext_t m_context;
     // 协程执行函数
-    std::function<void()> c_func;
+    std::function<void()> m_func;
     // 协程是否参与调度器调度
-    bool c_runInScheduler;
+    bool m_runInScheduler;
 };
