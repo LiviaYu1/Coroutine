@@ -9,7 +9,7 @@
 #ifndef __THREAD_H__
 #define __THREAD_H__
 
-#include "Mutex.h"
+#include "../Mutex/Mutex.h"
 
 
 /**

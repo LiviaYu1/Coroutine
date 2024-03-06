@@ -1,4 +1,5 @@
 #include "Coroutine.h"
+#include "../Scheduler/Scheduler.h"
 #include <atomic>
 #include <string.h>
 #include <assert.h>
@@ -21,7 +22,6 @@ static thread_local Coroutine *thread_coroutine = nullptr;
 2. main->分出子线程->调度协程->任务模型 模型 main_co是调度协程
 而在后面的代码中，Scheduler类中保存了调度协程的相关信息，所以这里就是线程主协程了
 */
-
 static thread_local Coroutine::ptr main_coroutine = nullptr;
 
 Coroutine::Coroutine()
@@ -147,7 +147,7 @@ void Coroutine::resume()
     if (m_runInScheduler)
     {
         //如果协程参与调度器调度，那么和调度器协程swap
-        if (swapcontext(&(Scheduler::GetMainCoroutine()->m_ctx, &m_ctx)))
+        if (swapcontext(&(Scheduler::GetMainCoroutine()->m_context), &m_context))
         {
             perror("resume swapcontext failed...");
         }
@@ -181,7 +181,7 @@ void Coroutine::yield()
     if (m_runInScheduler)
     {
         //如果协程参与调度器调度，那么和调度器协程swap
-        if (swapcontext(&m_ctx,&(Scheduler::GetMainCoroutine()->m_ctx)))
+        if (swapcontext(&m_context,&(Scheduler::GetMainCoroutine()->m_context)))
         {
             perror("resume swapcontext failed...");
         }

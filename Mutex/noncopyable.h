@@ -34,5 +34,3 @@ public:
     Noncopyable& operator=(const Noncopyable&) = delete;
 };
 
-
-#endif

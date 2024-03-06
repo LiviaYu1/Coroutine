@@ -1,0 +1,1 @@
+g++ -o testScheduler testScheduler.cpp ../Coroutine/Coroutine.cpp ../Thread/Threads.cpp ../Scheduler/Scheduler.cpp -lpthread

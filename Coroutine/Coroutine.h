@@ -1,3 +1,5 @@
+#ifndef COROUTINE_H
+#define COROUTINE_H
 #include <memory>
 #include <functional>
 #include <ucontext.h>
@@ -80,7 +82,7 @@ public:
     /*
     @brief 返回当前线程正在执行的协程
     @details 如果当前线程还没有创建协程，则创建第一个协程，
-    且该协程为当前线程的主协程，为调度协程，可以调度管理别的线程
+    且该协程为当前线程的主协程，[为调度协程，可以调度管理别的线程]不一定
     其他协程结束时，需要切回到主协程，由主协程选择别的协程resume
     @attention 线程如果要创建协程，需要首先执行GetThis函数，以此初始化主协程
     */
@@ -117,3 +119,5 @@ private:
     // 协程是否参与调度器调度
     bool m_runInScheduler;
 };
+
+#endif // COROUTINE_H
