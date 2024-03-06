@@ -1,1 +1,2 @@
-g++ -o testScheduler testScheduler.cpp ../Coroutine/Coroutine.cpp ../Thread/Threads.cpp ../Scheduler/Scheduler.cpp -lpthread
+g++ -o testScheduler testScheduler.cpp ../Coroutine/Coroutine.cpp ../Thread/Threads.cpp ../Scheduler/Scheduler.cpp -lpthread -fno-stack-protector
+g++ -o testScheduler2 testScheduler2.cpp ../Coroutine/Coroutine.cpp ../Thread/Threads.cpp ../Scheduler/Scheduler.cpp -lpthread 

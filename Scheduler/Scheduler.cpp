@@ -227,7 +227,7 @@ void Scheduler::stop()
     if (m_scheduleCoroutine)
     {
         m_scheduleCoroutine->resume();
-        printf("m_rootFiber end");
+        printf("m_scheduleCoroutine end");
     }
 
     std::vector<Thread::ptr> thrs;

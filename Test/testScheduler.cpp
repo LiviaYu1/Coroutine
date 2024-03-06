@@ -86,12 +86,12 @@ int main() {
     // sylar::Scheduler sc(3, false);
 
     // 添加调度任务，使用函数作为调度对象
-    sc.schedule(test_fiber1);
-    sc.schedule(test_fiber2);
+    //sc.schedule(test_fiber1);
+    //sc.schedule(test_fiber2);
 
     // 添加调度任务，使用Fiber类作为调度对象
-    Coroutine::ptr coroutine(new Coroutine(&test_fiber3));
-    sc.schedule(coroutine);
+    //Coroutine::ptr coroutine(new Coroutine(&test_fiber3));
+    //sc.schedule(coroutine);
 
     // 创建调度线程，开始任务调度，如果只使用main函数线程进行调度，那start相当于什么也没做
     sc.start();
@@ -100,7 +100,7 @@ int main() {
      * 只要调度器未停止，就可以添加调度任务
      * 包括在子协程中也可以通过sylar::Scheduler::GetThis()->scheduler()的方式继续添加调度任务
      */
-    sc.schedule(test_fiber4);
+    //sc.schedule(test_fiber4);
 
     /**
      * 停止调度，如果未使用当前线程进行调度，那么只需要简单地等所有调度线程退出即可
