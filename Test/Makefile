@@ -15,10 +15,10 @@ scsrc=testScheduler.cpp Coroutine.cpp Scheduler.cpp Threads.cpp
 scobj = $(scsrc:.cpp=.o)
 
 $(scprom): $(scobj)
-	g++ $^ -o $@
+	g++ $^ -o $@ -lpthread
 
 %.o: %.cpp
-	g++ -c $< -o $@
+	g++ -c $< -o $@ -lpthread
 
 
 # 设置依赖关系
@@ -27,4 +27,4 @@ Coroutine.o: Coroutine.cpp Coroutine.h
 
 .PHONY: clean
 clean:
-	rm -f $(obj) $(prom)
+	rm -f $(scobj) $(scprom)
