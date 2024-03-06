@@ -188,7 +188,7 @@ void Coroutine::yield()
     }
     else
     {
-        if (swapcontext(&main_coroutine->m_context, &m_context))
+        if (swapcontext(&m_context, &main_coroutine->m_context))
         {
             perror("resume swapcontext failed...");
         }
